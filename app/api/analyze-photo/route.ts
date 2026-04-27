@@ -48,6 +48,7 @@ Be accurate with brand identification. If you can't identify the item confidentl
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
@@ -77,7 +78,7 @@ Be accurate with brand identification. If you can't identify the item confidentl
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Claude API error:', data);
+      console.error('Claude API error:', response.status, JSON.stringify(data));
       return NextResponse.json({ error: 'Analysis failed' }, { status: 500 });
     }
 
