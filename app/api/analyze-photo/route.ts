@@ -50,7 +50,7 @@ Be accurate with brand identification. If you can't identify the item confidentl
         'x-api-key': process.env.ANTHROPIC_API_KEY!,
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-1-20250805',
+        model: 'claude-sonnet-4-6',
         max_tokens: 500,
         messages: [
           {
