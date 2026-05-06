@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Nav from "./components/Nav";
 
 export const metadata: Metadata = {
 	title: "Goodwill Donations Tracker",
@@ -9,7 +10,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
 	width: "device-width",
 	initialScale: 1,
-	maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -25,7 +25,13 @@ export default function RootLayout({
 					rel='stylesheet'
 				/>
 			</head>
-			<body>{children}</body>
+			<body>
+				<a href='#main' className='skip-link'>
+					Skip to main content
+				</a>
+				<Nav />
+				<main id='main'>{children}</main>
+			</body>
 		</html>
 	);
 }

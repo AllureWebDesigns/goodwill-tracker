@@ -48,3 +48,51 @@ button {
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Visible keyboard focus */
+:focus-visible {
+  outline: 2px solid #8B3A1F;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Skip-to-content link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: #1A1612;
+  color: #F6F2EA;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  z-index: 100;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .animate-pulse {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Ensure touch targets are at least 44x44 on small screens */
+@media (max-width: 480px) {
+  button, a, [role="button"] {
+    min-height: 36px;
+  }
+}

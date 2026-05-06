@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import {
 	Camera,
 	Plus,
@@ -15,6 +15,7 @@ import {
 	ChevronDown,
 	Filter,
 	Sparkles,
+	Pencil,
 } from "lucide-react";
 import { supabase, type Donation } from "@/lib/supabase";
 
@@ -130,6 +131,7 @@ export default function DonationsTracker() {
 	const [donations, setDonations] = useState<Donation[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showForm, setShowForm] = useState(false);
+	const [editing, setEditing] = useState<Donation | null>(null);
 	const [yearFilter, setYearFilter] = useState("all");
 	const [catFilter, setCatFilter] = useState("all");
 	const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
@@ -137,6 +139,15 @@ export default function DonationsTracker() {
 	useEffect(() => {
 		loadDonations();
 	}, []);
+
+	useEffect(() => {
+		if (!viewingPhoto) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setViewingPhoto(null);
+		};
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [viewingPhoto]);
 
 	const loadDonations = async () => {
 		const { data, error } = await supabase
@@ -161,6 +172,23 @@ export default function DonationsTracker() {
 		} else if (data) {
 			setDonations([data[0], ...donations]);
 			setShowForm(false);
+		}
+	};
+
+	const updateDonation = async (
+		id: string,
+		donation: Omit<Donation, "id" | "created_at">,
+	) => {
+		const { data, error } = await supabase
+			.from("donations")
+			.update(donation)
+			.eq("id", id)
+			.select();
+		if (error) {
+			console.error("Update error:", error);
+		} else if (data) {
+			setDonations(donations.map((d) => (d.id === id ? data[0] : d)));
+			setEditing(null);
 		}
 	};
 
@@ -335,6 +363,7 @@ export default function DonationsTracker() {
 				{/* Filters & Actions */}
 				<section className='flex items-center gap-2 mt-8 flex-wrap'>
 					<SelectField
+						label='Filter by year'
 						value={yearFilter}
 						onChange={setYearFilter}
 						options={[
@@ -344,6 +373,7 @@ export default function DonationsTracker() {
 						icon={<Calendar size={13} />}
 					/>
 					<SelectField
+						label='Filter by category'
 						value={catFilter}
 						onChange={setCatFilter}
 						options={[
@@ -391,6 +421,7 @@ export default function DonationsTracker() {
 									key={d.id}
 									donation={d}
 									onDelete={() => removeDonation(d.id)}
+									onEdit={() => setEditing(d)}
 									onViewPhoto={() =>
 										d.photo_url && setViewingPhoto(d.photo_url)
 									}
@@ -403,6 +434,7 @@ export default function DonationsTracker() {
 
 			{/* Floating add button */}
 			<button
+				type='button'
 				onClick={() => setShowForm(true)}
 				className='fixed bottom-6 right-6 flex items-center gap-2 px-5 py-3.5 rounded-full shadow-lg transition-transform active:scale-95'
 				style={{
@@ -413,9 +445,10 @@ export default function DonationsTracker() {
 					fontWeight: 500,
 					letterSpacing: "-0.01em",
 					boxShadow: "0 8px 24px -8px rgba(26,22,18,0.35)",
+					minHeight: 44,
 				}}
 			>
-				<Plus size={18} strokeWidth={2.2} />
+				<Plus size={18} strokeWidth={2.2} aria-hidden='true' />
 				Add donation
 			</button>
 
@@ -427,23 +460,42 @@ export default function DonationsTracker() {
 				/>
 			)}
 
+			{/* Edit modal */}
+			{editing && (
+				<AddDonationForm
+					editing={editing}
+					onClose={() => setEditing(null)}
+					onSave={(d) => updateDonation(editing.id, d)}
+				/>
+			)}
+
 			{/* Photo viewer */}
 			{viewingPhoto && (
 				<div
+					role='dialog'
+					aria-modal='true'
+					aria-label='Donation photo'
 					className='fixed inset-0 z-50 flex items-center justify-center p-6'
 					style={{ background: "rgba(26,22,18,0.92)" }}
 					onClick={() => setViewingPhoto(null)}
 				>
 					<button
+						type='button'
 						onClick={() => setViewingPhoto(null)}
+						aria-label='Close photo'
 						className='absolute top-5 right-5 p-2 rounded-full'
-						style={{ background: "rgba(255,255,255,0.12)", color: "#fff" }}
+						style={{
+							background: "rgba(255,255,255,0.12)",
+							color: "#fff",
+							minWidth: 44,
+							minHeight: 44,
+						}}
 					>
-						<X size={20} />
+						<X size={20} aria-hidden='true' />
 					</button>
 					<img
 						src={viewingPhoto}
-						alt='Donation'
+						alt='Donation item'
 						style={{ maxHeight: "85vh", maxWidth: "100%", borderRadius: 4 }}
 					/>
 				</div>
@@ -515,11 +567,13 @@ function SelectField({
 	onChange,
 	options,
 	icon,
+	label,
 }: {
 	value: string;
 	onChange: (v: string) => void;
 	options: [string, string][];
 	icon: React.ReactNode;
+	label: string;
 }) {
 	return (
 		<div className='relative'>
@@ -530,12 +584,16 @@ function SelectField({
 					background: C.surface,
 					fontSize: 12.5,
 					color: C.ink,
+					minHeight: 36,
 				}}
 			>
-				<span style={{ color: C.muted }}>{icon}</span>
+				<span style={{ color: C.muted }} aria-hidden='true'>
+					{icon}
+				</span>
 				<span>{options.find(([k]) => k === value)?.[1] || value}</span>
 				<ChevronDown
 					size={12}
+					aria-hidden='true'
 					style={{
 						color: C.muted,
 						position: "absolute",
@@ -546,6 +604,7 @@ function SelectField({
 				/>
 			</div>
 			<select
+				aria-label={label}
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
 				className='absolute inset-0 opacity-0 cursor-pointer'
@@ -563,10 +622,12 @@ function SelectField({
 function DonationRow({
 	donation,
 	onDelete,
+	onEdit,
 	onViewPhoto,
 }: {
 	donation: Donation;
 	onDelete: () => void;
+	onEdit: () => void;
 	onViewPhoto: () => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
@@ -578,7 +639,14 @@ function DonationRow({
 			style={{ background: C.surface, border: `1px solid ${C.border}` }}
 		>
 			<button
+				type='button'
 				onClick={donation.photo_url ? onViewPhoto : undefined}
+				disabled={!donation.photo_url}
+				aria-label={
+					donation.photo_url
+						? `View photo of ${donation.description}`
+						: "No photo available"
+				}
 				className='flex-shrink-0 rounded overflow-hidden flex items-center justify-center'
 				style={{
 					width: 72,
@@ -595,7 +663,7 @@ function DonationRow({
 						style={{ width: "100%", height: "100%", objectFit: "cover" }}
 					/>
 				) : (
-					<ImageIcon size={20} style={{ color: C.subtle }} />
+					<ImageIcon size={20} style={{ color: C.subtle }} aria-hidden='true' />
 				)}
 			</button>
 
@@ -664,8 +732,9 @@ function DonationRow({
 
 			<div className='flex-shrink-0 flex items-start'>
 				{confirming ? (
-					<div className='flex gap-1'>
+					<div className='flex gap-1' role='group' aria-label='Confirm delete'>
 						<button
+							type='button'
 							onClick={onDelete}
 							style={{
 								fontSize: 11,
@@ -678,6 +747,7 @@ function DonationRow({
 							Delete
 						</button>
 						<button
+							type='button'
 							onClick={() => setConfirming(false)}
 							style={{
 								fontSize: 11,
@@ -690,13 +760,32 @@ function DonationRow({
 						</button>
 					</div>
 				) : (
-					<button
-						onClick={() => setConfirming(true)}
-						className='p-1.5 rounded opacity-40 hover:opacity-100 transition-opacity'
-						aria-label='Delete'
-					>
-						<Trash2 size={14} style={{ color: C.muted }} />
-					</button>
+					<div className='flex flex-col gap-0.5'>
+						<button
+							type='button'
+							onClick={onEdit}
+							className='p-1.5 rounded opacity-40 hover:opacity-100 focus-visible:opacity-100 transition-opacity'
+							aria-label={`Edit ${donation.description}`}
+						>
+							<Pencil
+								size={14}
+								style={{ color: C.muted }}
+								aria-hidden='true'
+							/>
+						</button>
+						<button
+							type='button'
+							onClick={() => setConfirming(true)}
+							className='p-1.5 rounded opacity-40 hover:opacity-100 focus-visible:opacity-100 transition-opacity'
+							aria-label={`Delete ${donation.description}`}
+						>
+							<Trash2
+								size={14}
+								style={{ color: C.muted }}
+								aria-hidden='true'
+							/>
+						</button>
+					</div>
 				)}
 			</div>
 		</div>
@@ -759,12 +848,30 @@ function EmptyState({ hasAny, onAdd }: { hasAny: boolean; onAdd: () => void }) {
 function AddDonationForm({
 	onClose,
 	onSave,
+	editing,
 }: {
 	onClose: () => void;
 	onSave: (d: Omit<Donation, "id" | "created_at">) => Promise<void>;
+	editing?: Donation;
 }) {
-	const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+	const titleId = useId();
+	const [photoPreview, setPhotoPreview] = useState<string | null>(
+		editing?.photo_url || null,
+	);
 	const [processing, setProcessing] = useState(false);
+
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose();
+		};
+		document.addEventListener("keydown", onKey);
+		const prevOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			document.removeEventListener("keydown", onKey);
+			document.body.style.overflow = prevOverflow;
+		};
+	}, [onClose]);
 	const [analyzing, setAnalyzing] = useState(false);
 	const [aiNote, setAiNote] = useState<{
 		reasoning?: string;
@@ -773,13 +880,13 @@ function AddDonationForm({
 	} | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [form, setForm] = useState({
-		description: "",
-		date: new Date().toISOString().slice(0, 10),
-		category: "Clothing & Shoes",
-		condition: "Good",
-		quantity: 1 as string | number,
-		value: "" as string | number,
-		notes: "",
+		description: editing?.description || "",
+		date: editing?.date || new Date().toISOString().slice(0, 10),
+		category: editing?.category || "Clothing & Shoes",
+		condition: editing?.condition || "Good",
+		quantity: (editing?.quantity ?? 1) as string | number,
+		value: (editing?.value ?? "") as string | number,
+		notes: editing?.notes || "",
 	});
 	const fileRef = useRef<HTMLInputElement>(null);
 
@@ -864,6 +971,9 @@ function AddDonationForm({
 			onClick={onClose}
 		>
 			<div
+				role='dialog'
+				aria-modal='true'
+				aria-labelledby={titleId}
 				onClick={(e) => e.stopPropagation()}
 				className='w-full max-w-lg rounded-t-2xl sm:rounded-lg overflow-hidden fade-in'
 				style={{
@@ -888,9 +998,10 @@ function AddDonationForm({
 								textTransform: "uppercase",
 							}}
 						>
-							New Entry
+							{editing ? "Edit Entry" : "New Entry"}
 						</div>
 						<div
+							id={titleId}
 							style={{
 								fontFamily: '"Fraunces", serif',
 								fontSize: 22,
@@ -898,15 +1009,17 @@ function AddDonationForm({
 								marginTop: 2,
 							}}
 						>
-							Add donation
+							{editing ? "Edit donation" : "Add donation"}
 						</div>
 					</div>
 					<button
+						type='button'
 						onClick={onClose}
+						aria-label='Close dialog'
 						className='p-2 rounded'
-						style={{ color: C.muted }}
+						style={{ color: C.muted, minWidth: 44, minHeight: 44 }}
 					>
-						<X size={20} />
+						<X size={20} aria-hidden='true' />
 					</button>
 				</div>
 
@@ -1059,66 +1172,80 @@ function AddDonationForm({
 
 					{/* Description */}
 					<Field label='Item description' required>
-						<input
-							value={form.description}
-							onChange={(e) =>
-								setForm({ ...form, description: e.target.value })
-							}
-							placeholder='e.g. Wool coat, black, size M'
-							style={inputStyle}
-						/>
+						{(props) => (
+							<input
+								{...props}
+								value={form.description}
+								onChange={(e) =>
+									setForm({ ...form, description: e.target.value })
+								}
+								placeholder='e.g. Wool coat, black, size M'
+								required
+								style={inputStyle}
+							/>
+						)}
 					</Field>
 
 					{/* Value + Quantity */}
 					<div className='grid grid-cols-3 gap-3 mb-4'>
 						<div className='col-span-2'>
 							<Field label='Your value estimate' required>
-								<div className='relative'>
-									<span
-										style={{
-											position: "absolute",
-											left: 12,
-											top: "50%",
-											transform: "translateY(-50%)",
-											color: C.muted,
-											fontFamily: '"JetBrains Mono", monospace',
-											fontSize: 14,
-										}}
-									>
-										$
-									</span>
-									<input
-										type='number'
-										inputMode='decimal'
-										step='0.01'
-										min='0'
-										value={form.value}
-										onChange={(e) =>
-											setForm({ ...form, value: e.target.value })
-										}
-										placeholder='0.00'
-										style={{
-											...inputStyle,
-											paddingLeft: 24,
-											fontFamily: '"JetBrains Mono", monospace',
-										}}
-									/>
-								</div>
+								{(props) => (
+									<div className='relative'>
+										<span
+											aria-hidden='true'
+											style={{
+												position: "absolute",
+												left: 12,
+												top: "50%",
+												transform: "translateY(-50%)",
+												color: C.muted,
+												fontFamily: '"JetBrains Mono", monospace',
+												fontSize: 14,
+											}}
+										>
+											$
+										</span>
+										<input
+											{...props}
+											type='number'
+											inputMode='decimal'
+											step='0.01'
+											min='0'
+											required
+											value={form.value}
+											onChange={(e) =>
+												setForm({ ...form, value: e.target.value })
+											}
+											placeholder='0.00'
+											style={{
+												...inputStyle,
+												paddingLeft: 24,
+												fontFamily: '"JetBrains Mono", monospace',
+											}}
+										/>
+									</div>
+								)}
 							</Field>
 						</div>
 						<Field label='Quantity'>
-							<input
-								type='number'
-								inputMode='numeric'
-								min='1'
-								value={form.quantity}
-								onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-								style={{
-									...inputStyle,
-									fontFamily: '"JetBrains Mono", monospace',
-									textAlign: "center",
-								}}
-							/>
+							{(props) => (
+								<input
+									{...props}
+									type='number'
+									inputMode='numeric'
+									min='1'
+									value={form.quantity}
+									onChange={(e) =>
+										setForm({ ...form, quantity: e.target.value })
+									}
+									style={{
+										...inputStyle,
+										fontFamily: '"JetBrains Mono", monospace',
+										textAlign: "center",
+									}}
+								/>
+							)}
 						</Field>
 					</div>
 
@@ -1140,46 +1267,57 @@ function AddDonationForm({
 
 					{/* Date */}
 					<Field label='Date'>
-						<input
-							type='date'
-							value={form.date}
-							onChange={(e) => setForm({ ...form, date: e.target.value })}
-							style={{
-								...inputStyle,
-								fontFamily: '"JetBrains Mono", monospace',
-							}}
-						/>
+						{(props) => (
+							<input
+								{...props}
+								type='date'
+								value={form.date}
+								onChange={(e) => setForm({ ...form, date: e.target.value })}
+								style={{
+									...inputStyle,
+									fontFamily: '"JetBrains Mono", monospace',
+								}}
+							/>
+						)}
 					</Field>
 
 					{/* Category + Condition */}
 					<div className='grid grid-cols-2 gap-3 mb-4'>
 						<Field label='Category'>
-							<select
-								value={form.category}
-								onChange={(e) => setForm({ ...form, category: e.target.value })}
-								style={inputStyle}
-							>
-								{CATEGORIES.map((c) => (
-									<option key={c} value={c}>
-										{c}
-									</option>
-								))}
-							</select>
+							{(props) => (
+								<select
+									{...props}
+									value={form.category}
+									onChange={(e) =>
+										setForm({ ...form, category: e.target.value })
+									}
+									style={inputStyle}
+								>
+									{CATEGORIES.map((c) => (
+										<option key={c} value={c}>
+											{c}
+										</option>
+									))}
+								</select>
+							)}
 						</Field>
 						<Field label='Condition'>
-							<select
-								value={form.condition}
-								onChange={(e) =>
-									setForm({ ...form, condition: e.target.value })
-								}
-								style={inputStyle}
-							>
-								{CONDITIONS.map((c) => (
-									<option key={c} value={c}>
-										{c}
-									</option>
-								))}
-							</select>
+							{(props) => (
+								<select
+									{...props}
+									value={form.condition}
+									onChange={(e) =>
+										setForm({ ...form, condition: e.target.value })
+									}
+									style={inputStyle}
+								>
+									{CONDITIONS.map((c) => (
+										<option key={c} value={c}>
+											{c}
+										</option>
+									))}
+								</select>
+							)}
 						</Field>
 					</div>
 
@@ -1188,17 +1326,20 @@ function AddDonationForm({
 						label='Notes'
 						hint='Optional — brand, details, Goodwill location'
 					>
-						<textarea
-							value={form.notes}
-							onChange={(e) => setForm({ ...form, notes: e.target.value })}
-							rows={2}
-							style={{
-								...inputStyle,
-								resize: "none",
-								paddingTop: 10,
-								paddingBottom: 10,
-							}}
-						/>
+						{(props) => (
+							<textarea
+								{...props}
+								value={form.notes}
+								onChange={(e) => setForm({ ...form, notes: e.target.value })}
+								rows={2}
+								style={{
+									...inputStyle,
+									resize: "none",
+									paddingTop: 10,
+									paddingBottom: 10,
+								}}
+							/>
+						)}
 					</Field>
 				</div>
 
@@ -1228,7 +1369,11 @@ function AddDonationForm({
 							cursor: canSave && !saving ? "pointer" : "not-allowed",
 						}}
 					>
-						{saving ? "Saving…" : "Save donation"}
+						{saving
+							? "Saving…"
+							: editing
+								? "Save changes"
+								: "Save donation"}
 					</button>
 				</div>
 			</div>
@@ -1256,12 +1401,15 @@ function Field({
 	label: string;
 	hint?: string;
 	required?: boolean;
-	children: React.ReactNode;
+	children: (props: { id: string; "aria-describedby"?: string }) => React.ReactNode;
 }) {
+	const id = useId();
+	const hintId = `${id}-hint`;
 	return (
 		<div className='mb-4'>
 			<div className='flex items-baseline justify-between mb-1.5'>
 				<label
+					htmlFor={id}
 					style={{
 						fontFamily: '"JetBrains Mono", monospace',
 						fontSize: 10,
@@ -1272,16 +1420,22 @@ function Field({
 				>
 					{label}
 					{required && (
-						<span style={{ color: C.accent, marginLeft: 4 }}>*</span>
+						<span style={{ color: C.accent, marginLeft: 4 }} aria-hidden='true'>
+							*
+						</span>
 					)}
+					{required && <span className='sr-only'> (required)</span>}
 				</label>
 				{hint && (
-					<span style={{ fontSize: 11, color: C.subtle, fontStyle: "italic" }}>
+					<span
+						id={hintId}
+						style={{ fontSize: 11, color: C.subtle, fontStyle: "italic" }}
+					>
 						{hint}
 					</span>
 				)}
 			</div>
-			{children}
+			{children({ id, "aria-describedby": hint ? hintId : undefined })}
 		</div>
 	);
 }
